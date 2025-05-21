@@ -8,5 +8,4 @@ dependencies = [
     "fastapi[standard]>=0.115.12",
     "hf-xet>=1.1.2",
     "sentence-transformers>=4.1.0",
-    "torch>=2.7.0",
 ]

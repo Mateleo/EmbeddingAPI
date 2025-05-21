@@ -1,7 +1,6 @@
 import os
 from typing import List, Union
 
-import torch
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from sentence_transformers import SentenceTransformer
@@ -13,7 +12,7 @@ from sentence_transformers import SentenceTransformer
 MODEL_PATH = os.getenv("MODEL_PATH", "mixedbread-ai/mxbai-embed-large-v1")
 # For retrieval, add the prompt for query (not for documents).
 QUERY_PROMPT = "Represent this sentence for searching relevant passages: "
-TRUNCATE_DIMENSIONS = 512  # As per example, can be None for full dimensions
+TRUNCATE_DIMENSIONS = None  # As per example, can be None for full dimensions
 
 # --- Model Loading (Global instance for efficiency) ---
 app = FastAPI(
@@ -22,8 +21,8 @@ app = FastAPI(
     version="0.1.0",
 )
 
-model: SentenceTransformer = None
-device: torch.device = None
+model: SentenceTransformer | None = None
+device = None
 
 
 @app.on_event("startup")
@@ -31,9 +30,9 @@ async def load_model():
     """Load the model onto CPU when the FastAPI application starts."""
     global model, device
 
-    # Force CPU device for a CPU-only build
-    device = torch.device("cpu")
-    print("Forcing CPU for inference (as per CPU-only build).")
+    # SentenceTransformers will default to CPU if a GPU is not available
+    device = "cpu"
+    print("Attempting to load model on CPU.")
 
     print(
         f"Loading SentenceTransformer model from: {MODEL_PATH} on device: {device}..."
@@ -68,7 +67,12 @@ class EmbedResponse(BaseModel):
 async def health_check():
     """Basic health check endpoint."""
     if model is not None:
-        return {"status": "ok", "model_loaded": True, "device": str(device)}
+        # The SentenceTransformer model's device is not directly exposed
+        # in a simple way that doesn't rely on the underlying framework
+        # (like PyTorch or TensorFlow). Since we've removed the direct
+        # torch import, we'll indicate that the model is loaded on CPU
+        # based on our loading strategy.
+        return {"status": "ok", "model_loaded": True, "device": "cpu"}
     return {"status": "loading_model", "model_loaded": False, "device": "unknown"}
 
 
@@ -96,6 +100,7 @@ async def get_embeddings(request: EmbedRequest):
 
     try:
         # Encode the text(s).
+        # SentenceTransformer's encode method handles batched input.
         embeddings = model.encode(texts_to_encode).tolist()
         return EmbedResponse(embeddings=embeddings)
     except Exception as e:
