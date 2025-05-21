@@ -1,44 +1,57 @@
-# Stage 1: Builder
-# Uses a Python image with uv pre-installed for efficient dependency management
+# Stage 1: Builder - for installing Python packages and downloading/staging the model
+# Using a uv-enabled Python slim image for efficient dependency management
 FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim AS builder
 
-# Set working directory
 WORKDIR /app
 
-# Copy pyproject.toml and uv.lock first to leverage Docker's build cache
-# uv.lock is crucial for reproducible builds. Generate it locally with `uv lock`
+# Set build-time environment variables for uv and model cache
+# UV_COMPILE_BYTECODE=1 ensures all uv commands compile bytecode for faster startup
+ENV UV_COMPILE_BYTECODE=1
+# Temporarily set HF_HOME to a cache directory within /tmp.
+# This ensures that default model downloads don't pollute /root/.cache, which is harder to control.
+ENV HF_HOME=/tmp/hf_cache
+
+# Copy pyproject.toml and uv.lock to leverage Docker's build cache
+# uv.lock is crucial for reproducible builds. Generate it locally with `uv lock`.
 COPY pyproject.toml uv.lock ./
 
-# Install project dependencies into a virtual environment
-# --locked: Ensures dependencies are installed exactly as specified in uv.lock
-# --compile-bytecode: Compiles Python source files to bytecode for faster startup
-# --no-install-project: Installs only dependencies, not the project itself yet (improves caching if project changes frequently)
-RUN uv sync --locked --compile-bytecode --no-install-project
+# Install Python dependencies (FastAPI, uvicorn, sentence-transformers, torch) into .venv
+# --no-install-project ensures only the declared dependencies are installed, not the project itself yet.
+RUN uv sync --locked --no-install-project --no-cache
 
-# Copy the rest of your application code
-COPY main.py ./
+# --- FIX: Set PATH to include the virtual environment's bin directory ---
+# This ensures that subsequent `python` commands use the interpreter from `.venv`
+ENV PATH="/app/.venv/bin:$PATH"
 
-# Install the project itself (if it were an installable package, but here for completeness)
-# uv sync will recognize the existing .venv and ensure it's up-to-date
-RUN uv sync --locked --compile-bytecode
+# --- Model Download and Staging ---
+# Now, sentence_transformers will be available because Python will find it in /app/.venv/bin
+RUN python -c "from sentence_transformers import SentenceTransformer; \
+               model = SentenceTransformer('mixedbread-ai/mxbai-embed-large-v1'); \
+               model.save_pretrained('/app/model_data')"
 
-# Stage 2: Final image
-# Uses a minimal Python slim image to keep the final image size small
+# Stage 2: Final - a minimal image for production
+# Using a very minimal Python slim image to keep the final image size as small as possible.
 FROM python:3.12-slim-bookworm
 
-# Set working directory
 WORKDIR /app
 
-# Copy the created virtual environment from the builder stage
-# This includes all installed dependencies and compiled bytecode
+# Copy the virtual environment from the builder stage
+# This .venv contains only Python packages (FastAPI, PyTorch, sentence-transformers code), not the large model files.
 COPY --from=builder /app/.venv /app/.venv
 
-# Copy the application code
+# Copy the pre-downloaded and staged model files from the builder stage
+COPY --from=builder /app/model_data /app/model_data
+
+# Copy the main application file
 COPY main.py ./
 
-# Set the PATH to include the virtual environment's bin directory
+# Set the PATH environment variable to include the virtual environment's bin directory
 # This ensures that python and installed packages within .venv are used
 ENV PATH="/app/.venv/bin:$PATH"
+
+# Set a runtime environment variable for the model path that our main.py will use.
+# This tells our application where to load the model from within the container.
+ENV MODEL_PATH="/app/model_data"
 
 # Expose the port FastAPI will run on
 EXPOSE 8000

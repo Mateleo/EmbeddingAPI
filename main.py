@@ -7,16 +7,18 @@ from pydantic import BaseModel
 from sentence_transformers import SentenceTransformer
 
 # --- Configuration ---
-MODEL_NAME = "mixedbread-ai/mxbai-embed-large-v1"
+# Get model path from environment variable, default to the one expected in Docker
+# When running locally without Docker, it will still download from HF if not found.
+# In Docker, we'll explicitly set MODEL_PATH to the local directory where the model is staged.
+MODEL_PATH = os.getenv("MODEL_PATH", "mixedbread-ai/mxbai-embed-large-v1")
 # For retrieval, add the prompt for query (not for documents).
-# "Represent this sentence for searching relevant passages: "
 QUERY_PROMPT = "Represent this sentence for searching relevant passages: "
-TRUNCATE_DIMENSIONS = None  # As per example, can be None for full dimensions
+TRUNCATE_DIMENSIONS = 512  # As per example, can be None for full dimensions
 
 # --- Model Loading (Global instance for efficiency) ---
 app = FastAPI(
-    title="Dead Simple Embedding API (CPU Only)",
-    description=f"CPU-only API to get text embeddings using {MODEL_NAME}.",
+    title="Simple Embeddings API (CPU Only)",
+    description=f"CPU-only API to get text embeddings using {MODEL_PATH}.",
     version="0.1.0",
 )
 
@@ -33,10 +35,13 @@ async def load_model():
     device = torch.device("cpu")
     print("Forcing CPU for inference (as per CPU-only build).")
 
-    print(f"Loading SentenceTransformer model: {MODEL_NAME} on device: {device}...")
+    print(
+        f"Loading SentenceTransformer model from: {MODEL_PATH} on device: {device}..."
+    )
     try:
+        # Load from local path if MODEL_PATH is a directory, else from HF Hub
         model = SentenceTransformer(
-            MODEL_NAME, device=device, truncate_dim=TRUNCATE_DIMENSIONS
+            MODEL_PATH, device=device, truncate_dim=TRUNCATE_DIMENSIONS
         )
         print("Model loaded successfully!")
     except Exception as e:
@@ -91,20 +96,9 @@ async def get_embeddings(request: EmbedRequest):
 
     try:
         # Encode the text(s).
-        # model.encode automatically handles single string vs. list of strings
-        # It returns a numpy array, convert to list for JSON serialization
         embeddings = model.encode(texts_to_encode).tolist()
         return EmbedResponse(embeddings=embeddings)
     except Exception as e:
         raise HTTPException(
             status_code=500, detail=f"Error during embedding generation: {e}"
         )
-
-
-# Example usage (same as before):
-# For a document:
-# curl -X POST "http://localhost:8000/embed" -H "Content-Type: application/json" -d '{"text": "A man is eating a piece of bread"}'
-# For a query:
-# curl -X POST "http://localhost:8000/embed" -H "Content-Type: application/json" -d '{"text": "What is he eating?", "is_query": true}'
-# For multiple texts (documents):
-# curl -X POST "http://localhost:8000/embed" -H "Content-Type: application/json" -d '{"text": ["A man is eating a piece of bread", "The girl is carrying a baby"]}'
