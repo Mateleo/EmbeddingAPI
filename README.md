@@ -78,19 +78,3 @@ curl -X POST "http://localhost:8000/embed" \
      -H "Content-Type: application/json" \
      -d '{"text": ["A man is eating food.", "The girl is carrying a baby."]}' | json_pp
 ```
-
----
-
-## 📦 Under the Hood
-
-This project uses modern Python tooling for a lean and efficient deployment:
-
-- **`pyproject.toml`**: Single source of truth for project metadata and dependencies.
-- **`uv`**: Fast package manager for lightning-fast installs and lockfile management.
-- **Multi-Stage Dockerfile**: Builds a tiny final image by separating build and runtime dependencies.
-
----
-
-## 📄 License
-
-This project is licensed under the Apache 2.0 License.
