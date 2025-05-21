@@ -25,7 +25,7 @@ Get your embeddings service up and running in minutes!
     cd EmbeddingAPI
     ```
 
-2.  **Install dependencies and generate `uv.lock`**: _(Requires `uv` installed locally: `curl -LsSf https://astral.sh/uv/install.sh | sh`)_
+2.  **Install dependencies**
 
     ```bash
     uv lock
@@ -36,7 +36,7 @@ Get your embeddings service up and running in minutes!
 
     ```bash
     uv run download_model.py
-    uv run main.py
+    uvicorn main:app --host 0.0.0.0 --port 8000
     ```
 
 ## 💡 Usage
