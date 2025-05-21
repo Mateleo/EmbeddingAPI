@@ -17,7 +17,12 @@ COPY pyproject.toml uv.lock ./
 
 # Install Python dependencies (FastAPI, uvicorn, sentence-transformers, torch) into .venv
 # --no-install-project ensures only the declared dependencies are installed, not the project itself yet.
-RUN uv sync --locked --no-install-project --no-cache
+RUN uv sync --locked --no-install-project --no-cache && \
+    uv pip install --no-cache-dir \
+    # Specify the CPU-only version of torch using the index URL
+    torch --index-url https://download.pytorch.org/whl/cpu \
+    # Install other dependencies from the default index
+    sentence-transformers hf-xet 'fastapi[standard]'
 
 # --- FIX: Set PATH to include the virtual environment's bin directory ---
 # This ensures that subsequent `python` commands use the interpreter from `.venv`
