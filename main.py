@@ -91,13 +91,17 @@ async def get_embeddings(request: EmbedRequest):
     if not request.text:
         raise HTTPException(status_code=400, detail="Input text cannot be empty.")
 
+    # Ensure texts_to_encode is always a list
     texts_to_encode = request.text
-    if request.is_query:
-        if isinstance(texts_to_encode, str):
-            texts_to_encode = QUERY_PROMPT + texts_to_encode
-        elif isinstance(texts_to_encode, list):
-            texts_to_encode = [QUERY_PROMPT + t for t in texts_to_encode]
+    if isinstance(texts_to_encode, str):
+        texts_to_encode = [texts_to_encode]  # Wrap the single string in a list
+    elif not isinstance(texts_to_encode, list):
+        raise HTTPException(
+            status_code=400, detail="Input text must be a string or a list of strings."
+        )
 
+    if request.is_query:
+        texts_to_encode = [QUERY_PROMPT + t for t in texts_to_encode]
     try:
         # Encode the text(s).
         # SentenceTransformer's encode method handles batched input.
