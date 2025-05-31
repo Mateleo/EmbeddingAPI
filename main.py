@@ -66,14 +66,12 @@ class EmbedResponse(BaseModel):
 @app.get("/health")
 async def health_check():
     """Basic health check endpoint."""
-    if model is not None:
-        # The SentenceTransformer model's device is not directly exposed
-        # in a simple way that doesn't rely on the underlying framework
-        # (like PyTorch or TensorFlow). Since we've removed the direct
-        # torch import, we'll indicate that the model is loaded on CPU
-        # based on our loading strategy.
-        return {"status": "ok", "model_loaded": True, "device": "cpu"}
-    return {"status": "loading_model", "model_loaded": False, "device": "unknown"}
+    status = {
+        "status": "ok" if model is not None else "loading_model",
+        "model_loaded": model is not None,
+        "device": "cpu" if model is not None else "unknown",
+    }
+    return status
 
 
 @app.post("/embed", response_model=EmbedResponse)
